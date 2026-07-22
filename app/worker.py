@@ -1,0 +1,80 @@
+import asyncio
+from .config import MAX_PARALLEL_SESSIONS, POLL_INTERVAL
+from .db import connect, now
+from .devin_client import DevinClient
+from .logging_utils import log_event
+from .state import transition
+
+class PriorityQueue:
+    def __init__(self):
+        self.queue = asyncio.PriorityQueue()
+    async def put(self, task):
+        priority = 0 if "security" in [x.lower() for x in task["labels"]] else 1
+        await self.queue.put((priority, task["id"], task))
+    async def get(self): return (await self.queue.get())[2]
+
+class WorkerPool:
+    def __init__(self):
+        self.queue = PriorityQueue()
+        self.client = DevinClient()
+        self.semaphore = asyncio.Semaphore(MAX_PARALLEL_SESSIONS)
+        self.tasks = set()
+
+    async def enqueue(self, task):
+        await self.queue.put(task)
+
+    async def run_one(self, task):
+        async with self.semaphore:
+            cid = task["correlation_id"]
+            try:
+                transition(task["id"], "WORKING", cid)
+                prompt = f"""Remediate GitHub issue #{task['issue_number']}: {task['title']}
+Body: {task['body']}
+Repository: {task['repo']}. Implement a safe fix, tests, and open a PR against cooco119/superset."""
+                result = await self.client.create_session(prompt)
+                with connect() as db:
+                    db.execute("UPDATE tasks SET session_id=?,attempts=attempts+1,updated_at=? WHERE id=?",
+                               (result["session_id"], now(), task["id"]))
+                while True:
+                    status = await self.client.get_session(result["session_id"])
+                    value = str(status.get("status_enum", "")).lower()
+                    if value in {"blocked", "blocked_by_user"}:
+                        transition(task["id"], "BLOCKED", cid)
+                        if not task.get("blocked_escalated"):
+                            await self.client.send_message(result["session_id"],
+                                "Please continue using the available context and report concrete blockers.")
+                            with connect() as db:
+                                db.execute("UPDATE tasks SET blocked_escalated=1 WHERE id=?", (task["id"],))
+                            transition(task["id"], "WORKING", cid)
+                        else:
+                            raise RuntimeError("Devin session blocked")
+                    elif value in {"finished", "completed", "done"}:
+                        pr = status.get("pull_request") or {}
+                        if not pr: raise RuntimeError("session finished without pull request")
+                        with connect() as db:
+                            db.execute("UPDATE tasks SET pr_url=?,updated_at=? WHERE id=?",
+                                       (pr.get("url") or pr.get("html_url"), now(), task["id"]))
+                        transition(task["id"], "IN_REVIEW", cid)
+                        transition(task["id"], "EVALUATING", cid)
+                        from .evaluator import evaluate_task
+                        await evaluate_task(task["id"])
+                        break
+                    elif value in {"failed", "error"}:
+                        raise RuntimeError("Devin session failed")
+                    await asyncio.sleep(POLL_INTERVAL)
+            except Exception as exc:
+                log_event("task_failed", cid, task_id=task["id"], error=str(exc))
+                with connect() as db:
+                    attempts = db.execute("SELECT attempts FROM tasks WHERE id=?", (task["id"],)).fetchone()["attempts"]
+                if attempts < 3:
+                    try: transition(task["id"], "FAILED", cid); transition(task["id"], "QUEUED", cid)
+                    except ValueError: pass
+                    await self.enqueue(task)
+                else:
+                    try: transition(task["id"], "FAILED", cid)
+                    except ValueError: pass
+
+    async def serve(self):
+        while True:
+            task = await self.queue.get()
+            await self.run_one(task)
