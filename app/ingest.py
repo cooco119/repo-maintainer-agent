@@ -3,6 +3,7 @@ import json
 import uuid
 from .db import connect, now, row_task
 from .logging_utils import log_event
+from .notifier import notify_background
 
 def key_for(repo, issue_number, body):
     normalized = " ".join((body or "").split()).strip().lower()
@@ -27,4 +28,9 @@ def ingest_issue(repo, issue_number, title, body, labels=None):
                    (task_id, correlation_id, "INGESTED", json.dumps({"title": title}), timestamp))
         task = db.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
     log_event("issue_ingested", correlation_id, task_id=task_id)
+    label_text = ", ".join(labels) if labels else "no labels"
+    notify_background(
+        f"📥 Picked up issue #{issue_number}: {title} ({label_text}) — queued.",
+        correlation_id,
+    )
     return row_task(task), True

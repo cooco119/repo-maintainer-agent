@@ -8,6 +8,7 @@ from .config import REPO, SCAN_INTERVAL_MIN
 from .db import connect, init_db
 from .evaluator import metrics
 from .ingest import ingest_issue
+from .notifier import notify
 from .scanner import scan
 from .worker import WorkerPool
 
@@ -75,6 +76,24 @@ def tasks():
 
 @app.get("/api/metrics")
 def api_metrics(): return metrics()
+
+async def _report():
+    values = metrics()
+    summary = (
+        "📈 Daily remediation summary\n"
+        f"Tasks: {values['counts']}\n"
+        f"TTR median: {values['ttr_median_seconds']:.0f}s · "
+        f"first-pass: {values['first_pass_success_rate']:.0%}\n"
+        f"Hours reclaimed: {values['engineer_hours_reclaimed']:.1f}"
+    )
+    await notify(summary, "daily-report")
+    return {"summary": summary, "metrics": values}
+
+@app.get("/report")
+async def get_report(): return await _report()
+
+@app.post("/report")
+async def post_report(): return await _report()
 
 @app.get("/")
 def dashboard(): return FileResponse(Path(__file__).parent.parent / "static" / "index.html")

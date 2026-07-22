@@ -3,6 +3,7 @@ from .config import MAX_PARALLEL_SESSIONS, POLL_INTERVAL
 from .db import connect, now
 from .devin_client import DevinClient
 from .logging_utils import log_event
+from .notifier import notify
 from .state import transition
 
 class PriorityQueue:
@@ -35,6 +36,11 @@ Fixes #{task['issue_number']}. Create branch remediator/issue-{task['issue_numbe
 make the minimal safe fix, run relevant lint and tests, and open a pull request
 against {task['repo']}'s master branch."""
                 result = await self.client.create_session(prompt)
+                await notify(
+                    f"🔧 Starting work on issue #{task['issue_number']} — session: "
+                    f"{result.get('url', 'pending')}",
+                    cid,
+                )
                 with connect() as db:
                     db.execute("UPDATE tasks SET session_id=?,session_url=?,attempts=attempts+1,updated_at=? WHERE id=?",
                                (result["session_id"], result.get("url"), now(), task["id"]))
@@ -44,6 +50,11 @@ against {task['repo']}'s master branch."""
                     if value in {"blocked", "blocked_by_user"}:
                         transition(task["id"], "BLOCKED", cid)
                         if not task.get("blocked_escalated"):
+                            await notify(
+                                f"⚠️ I'm blocked on issue #{task['issue_number']}, "
+                                "trying to unblock myself…",
+                                cid,
+                            )
                             await self.client.send_message(result["session_id"],
                                 "Please continue using the available context and report concrete blockers.")
                             with connect() as db:
@@ -51,6 +62,7 @@ against {task['repo']}'s master branch."""
                             task["blocked_escalated"] = 1
                             transition(task["id"], "WORKING", cid)
                         else:
+                            await notify(f"🙋 Need human help on issue #{task['issue_number']}", cid)
                             raise RuntimeError("Devin session blocked")
                     elif value in {"finished", "completed", "done"}:
                         pr = status.get("pull_request") or {}
@@ -58,6 +70,11 @@ against {task['repo']}'s master branch."""
                         with connect() as db:
                             db.execute("UPDATE tasks SET pr_url=?,updated_at=? WHERE id=?",
                                        (pr.get("url") or pr.get("html_url"), now(), task["id"]))
+                        await notify(
+                            f"✅ Opened PR for issue #{task['issue_number']}: "
+                            f"{pr.get('url') or pr.get('html_url')} — please review.",
+                            cid,
+                        )
                         transition(task["id"], "IN_REVIEW", cid)
                         transition(task["id"], "EVALUATING", cid)
                         from .evaluator import evaluate_task
@@ -77,6 +94,10 @@ against {task['repo']}'s master branch."""
                 else:
                     try: transition(task["id"], "FAILED", cid)
                     except ValueError: pass
+                    await notify(
+                        f"❌ Issue #{task['issue_number']} failed after {attempts} attempts.",
+                        cid,
+                    )
 
     async def serve(self):
         while True:

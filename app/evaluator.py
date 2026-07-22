@@ -8,6 +8,7 @@ import httpx
 from .config import GITHUB_TOKEN, HOURS_PER_ISSUE
 from .db import connect, now
 from .state import transition
+from .notifier import notify
 
 
 def _pr_api_url(pr_url):
@@ -54,6 +55,16 @@ async def evaluate_task(task_id):
             (task_id, None if checks is None else int(checks), None, score, feedback, now()),
         )
     transition(task_id, "DONE" if score >= 0.5 else "FAILED", task["correlation_id"])
+    await notify(
+        f"📊 Issue #{task['issue_number']} evaluated: score {score:.2f} "
+        f"(checks: {'passed' if checks is True else 'unknown'}).",
+        task["correlation_id"],
+    )
+    if score < 0.5:
+        await notify(
+            f"❌ Issue #{task['issue_number']} failed after {task['attempts']} attempts.",
+            task["correlation_id"],
+        )
     return score
 
 

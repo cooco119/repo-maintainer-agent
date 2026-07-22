@@ -25,6 +25,12 @@ curl -X POST localhost:8000/simulate/issue -H 'content-type: application/json' \
 The MCP stub is `python -m app.mcp_server`; it speaks JSON-RPC 2.0 over stdio and exposes
 `list_tasks`, `get_task`, and `get_metrics`.
 
+The optional Slack notifier posts human-style lifecycle updates for queued work, session
+starts, blockers, pull requests, evaluations, and terminal failures. `GET /report` or
+`POST /report` sends a compact daily-style summary to Slack and returns the same summary
+as JSON. Without a webhook configured, notifications are emitted as structured fallback
+logs so dry-run demos still show the teammate updates.
+
 ## Environment
 
 | Variable | Default | Purpose |
@@ -40,6 +46,7 @@ The MCP stub is `python -m app.mcp_server`; it speaks JSON-RPC 2.0 over stdio an
 | `MAX_ISSUES_PER_SCAN` | `3` | Maximum security issues created per scan |
 | `HOURS_PER_ISSUE` | `4.0` | Planning estimate used for reclaimed-hours metric |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | empty | Optional OTLP HTTP endpoint |
+| `SLACK_WEBHOOK_URL` | empty | Optional Slack Incoming Webhook URL |
 
 The scanner downloads the fork's `requirements/base.txt`, runs `pip-audit -r`, and falls
 back to OSV API queries for up to 40 pinned dependencies when pip-audit is unavailable or
