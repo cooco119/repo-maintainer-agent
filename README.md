@@ -78,6 +78,7 @@ from remediation workers and the API.
 | `SLACK_WEBHOOK_URL` | empty | Optional Slack Incoming Webhook URL |
 | `AUTO_MERGE` | `0` | Set to `1` to allow squash auto-merge after passing checks |
 | `GITHUB_POLL_INTERVAL_SEC` | `30` | Seconds between GitHub issue polls when `GITHUB_TOKEN` is set |
+| `TRIGGER_ASSIGNEE` | token login | GitHub login whose assignment explicitly starts remediation |
 
 The scanner downloads the fork's `requirements/base.txt`, runs `pip-audit -r`, and falls
 back to OSV API queries for up to 40 pinned dependencies when pip-audit is unavailable or
@@ -103,7 +104,16 @@ and either a `security` issue label or a small diff (at most three changed files
 ### Issue-driven demo
 
 With `GITHUB_TOKEN` configured, the background poller checks open issues every
-`GITHUB_POLL_INTERVAL_SEC` seconds. To demo the complete flow, open an issue titled
-**`dependency scan`** in the configured repository. The agent runs the scanner, comments
-with the result summary, closes the trigger issue, and queues any findings. Other newly
-opened issues are ingested and sent to Devin without a webhook or manual `curl`.
+`GITHUB_POLL_INTERVAL_SEC` seconds. New issues use a confidence-gated hybrid policy:
+
+| Issue shape | Poller action |
+|---|---|
+| `security`, `dependency`, `dependencies`, or `easy` label; or dependency/vulnerability/deprecation/typo title | Auto-ingest and enqueue |
+| No confidence signal | Comment with the triage marker and await assignment or `remediate` label |
+| Assigned to `TRIGGER_ASSIGNEE` (defaults to the token's GitHub login), or `remediate` label | Explicitly ingest and enqueue, regardless of confidence |
+
+To demo the complete flow, open a regular issue: the agent comments that it can help,
+then assign it to the configured assignee (or add `remediate`) and the agent starts.
+Alternatively, create a security-labeled issue for automatic pickup. To run the scanner,
+open an issue titled **`dependency scan`**; the agent comments with the result summary,
+closes the trigger issue, and queues any findings.
