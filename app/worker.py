@@ -30,11 +30,14 @@ class WorkerPool:
                 transition(task["id"], "WORKING", cid)
                 prompt = f"""Remediate GitHub issue #{task['issue_number']}: {task['title']}
 Body: {task['body']}
-Repository: {task['repo']}. Implement a safe fix, tests, and open a PR against cooco119/superset."""
+Repository: {task['repo']}.
+Fixes #{task['issue_number']}. Create branch remediator/issue-{task['issue_number']},
+make the minimal safe fix, run relevant lint and tests, and open a pull request
+against {task['repo']}'s master branch."""
                 result = await self.client.create_session(prompt)
                 with connect() as db:
-                    db.execute("UPDATE tasks SET session_id=?,attempts=attempts+1,updated_at=? WHERE id=?",
-                               (result["session_id"], now(), task["id"]))
+                    db.execute("UPDATE tasks SET session_id=?,session_url=?,attempts=attempts+1,updated_at=? WHERE id=?",
+                               (result["session_id"], result.get("url"), now(), task["id"]))
                 while True:
                     status = await self.client.get_session(result["session_id"])
                     value = str(status.get("status_enum", "")).lower()
@@ -45,6 +48,7 @@ Repository: {task['repo']}. Implement a safe fix, tests, and open a PR against c
                                 "Please continue using the available context and report concrete blockers.")
                             with connect() as db:
                                 db.execute("UPDATE tasks SET blocked_escalated=1 WHERE id=?", (task["id"],))
+                            task["blocked_escalated"] = 1
                             transition(task["id"], "WORKING", cid)
                         else:
                             raise RuntimeError("Devin session blocked")
@@ -77,4 +81,6 @@ Repository: {task['repo']}. Implement a safe fix, tests, and open a PR against c
     async def serve(self):
         while True:
             task = await self.queue.get()
-            await self.run_one(task)
+            work = asyncio.create_task(self.run_one(task))
+            self.tasks.add(work)
+            work.add_done_callback(self.tasks.discard)

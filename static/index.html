@@ -1,6 +1,28 @@
-<!doctype html><meta charset="utf-8"><title>Devin Remediator</title>
-<style>body{font:14px system-ui;margin:2rem;background:#f5f7fb}.board{display:flex;gap:1rem;flex-wrap:wrap}.col{background:white;padding:1rem;min-width:180px;border-radius:8px}li{margin:.5rem 0}</style>
-<h1>Devin Remediator</h1><pre id="metrics"></pre><div class="board" id="board"></div>
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>Remediator Control Room</title>
+<style>
+:root{font:14px Inter,system-ui,sans-serif;color:#172033;background:#f4f7fb}body{margin:0}
+header{background:#15233d;color:white;padding:24px 5%;display:flex;justify-content:space-between;align-items:center}
+main{max-width:1400px;margin:28px auto;padding:0 24px}.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+.card,.column{background:white;border:1px solid #e4e9f2;border-radius:12px;padding:16px;box-shadow:0 3px 12px #1720330b}
+.metric{font-size:26px;font-weight:700;margin-top:8px}.muted{color:#6d7890;font-size:12px}
+.bars{display:flex;gap:4px;align-items:end;height:32px}.bar{background:#4f8cff;width:24px;min-height:3px}
+.board{display:grid;grid-template-columns:repeat(7,minmax(150px,1fr));gap:12px;margin-top:22px;overflow:auto}
+.column{min-height:180px}.column h3{font-size:12px;letter-spacing:.08em;color:#66718a}.task{border:1px solid #e7ebf2;border-radius:9px;padding:11px;margin:10px 0;background:#fbfcfe}
+.task strong{display:block;margin-bottom:7px}.chip{display:inline-block;background:#e8f0ff;color:#2859ad;padding:3px 7px;border-radius:99px;font-size:11px;margin:2px}.links a{font-size:11px;margin-right:8px}
+details{margin-top:8px}.timeline{font-size:11px;color:#6d7890;padding-left:16px}
+@media(max-width:900px){.cards{grid-template-columns:repeat(2,1fr)}.board{grid-template-columns:repeat(3,minmax(180px,1fr))}}
+</style></head>
+<body><header><div><b>DEVIN REMEDIATOR</b><div class="muted">Autonomous GitHub remediation control room</div></div><span id="updated">Refreshing…</span></header>
+<main><section class="cards" id="cards"></section><h2>Task board</h2><section class="board" id="board"></section></main>
 <script>
-async function refresh(){const [t,m]=await Promise.all([fetch('/api/tasks').then(x=>x.json()),fetch('/api/metrics').then(x=>x.json())]); metrics.textContent=JSON.stringify(m,null,2); const states=['QUEUED','WORKING','BLOCKED','IN_REVIEW','EVALUATING','DONE','FAILED']; board.innerHTML=states.map(s=>`<section class="col"><h3>${s}</h3><ul>${t.filter(x=>x.state===s).map(x=>`<li>#${x.issue_number} ${x.title}</li>`).join('')}</ul></section>`).join('')} refresh();setInterval(refresh,5000);
-</script>
+const states=['QUEUED','WORKING','BLOCKED','IN_REVIEW','EVALUATING','DONE','FAILED'];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function refresh(){const [ts,m]=await Promise.all([fetch('/api/tasks').then(r=>r.json()),fetch('/api/metrics').then(r=>r.json())]);
+const d=m.success_by_difficulty||{};const bars=['easy','medium','hard'].map(x=>`<span title="${x}"><i class="bar" style="height:${Math.max(3,(d[x]||0)*30)}px"></i></span>`).join('');
+cards.innerHTML=[['TTR median',Math.round(m.ttr_median_seconds||0)+'s'],['First-pass success',Math.round((m.first_pass_success_rate||0)*100)+'%'],['Throughput/day',(m.throughput_per_day||0).toFixed(1)],['Hours reclaimed',(m.engineer_hours_reclaimed||0).toFixed(1)],['Success by difficulty',`<div class="bars">${bars}</div>`]].map(x=>`<div class="card"><div class="muted">${x[0]}</div><div class="metric">${x[1]}</div></div>`).join('');
+board.innerHTML=states.map(s=>`<section class="column"><h3>${s}</h3>${ts.filter(t=>t.state===s).map(t=>`<article class="task"><strong>${esc(t.title)}</strong><span class="muted">#${t.issue_number} · ${t.attempts} attempt(s)</span><div>${(t.labels||[]).map(l=>`<span class="chip">${esc(l)}</span>`).join('')}</div><div class="links">${t.pr_url?`<a href="${esc(t.pr_url)}" target="_blank">PR ↗</a>`:''}${t.session_url?`<a href="${esc(t.session_url)}" target="_blank">Devin ↗</a>`:''}</div><details><summary>Timeline</summary><ul class="timeline">${(t.timeline||[]).map(e=>`<li>${esc(e.event_type)} · ${esc(e.created_at)}</li>`).join('')}</ul></details></article>`).join('')}</section>`).join('');updated.textContent='Updated '+new Date().toLocaleTimeString()}
+refresh();setInterval(refresh,5000);
+</script></body></html>
