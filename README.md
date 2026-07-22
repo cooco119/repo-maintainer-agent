@@ -44,6 +44,7 @@ create an App-Level token with the `connections:write` scope, then configure:
 | `SLACK_APP_TOKEN` | empty | Socket Mode app token (`xapp-...`) |
 | `SLACK_CHANNEL` | empty | Channel for proactive bot lifecycle posts |
 | `SLACK_WEBHOOK_URL` | empty | Incoming Webhook fallback when bot channel is unset |
+| `DASHBOARD_URL` | empty | Optional dashboard link included in Slack status/report replies |
 
 The FastAPI lifespan starts Socket Mode only when both bot and app tokens are set.
 The bot understands `status`, `report`, `issue #N`, `scan`, and

@@ -4,7 +4,7 @@ import httpx
 from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 
-from .config import GITHUB_TOKEN, REPO, SLACK_APP_TOKEN, SLACK_BOT_TOKEN
+from .config import DASHBOARD_URL, GITHUB_TOKEN, REPO, SLACK_APP_TOKEN, SLACK_BOT_TOKEN
 from .db import connect
 from .evaluator import metrics
 from .ingest import ingest_issue
@@ -62,15 +62,19 @@ def create_app(pool):
                 for row in active
             ) or "No active sessions."
             counts = ", ".join(f"{key}: {value}" for key, value in values["counts"].items())
-            await say(f"Here’s the board: {counts}\nActive sessions:\n{active_text}")
+            dashboard = f"\n📊 Dashboard: {DASHBOARD_URL}" if DASHBOARD_URL else ""
+            await say(f"Here’s the board: {counts}\nActive sessions:\n{active_text}{dashboard}")
         elif action == "report":
             values = metrics()
-            await say(
+            summary = (
                 "📈 Daily report — "
                 f"TTR median {values['ttr_median_seconds']:.0f}s, "
                 f"first-pass {values['first_pass_success_rate']:.0%}, "
                 f"{values['engineer_hours_reclaimed']:.1f} hours reclaimed."
             )
+            if DASHBOARD_URL:
+                summary += f"\n📊 Dashboard: {DASHBOARD_URL}"
+            await say(summary)
         elif action == "issue":
             with connect() as db:
                 task = db.execute(

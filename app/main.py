@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
-from .config import REPO, SCAN_INTERVAL_MIN, SLACK_APP_TOKEN, SLACK_BOT_TOKEN
+from .config import DASHBOARD_URL, REPO, SCAN_INTERVAL_MIN, SLACK_APP_TOKEN, SLACK_BOT_TOKEN
 from .db import connect, init_db, row_task
 from .evaluator import metrics
 from .ingest import ingest_issue
@@ -99,6 +99,8 @@ async def _report():
         f"first-pass: {values['first_pass_success_rate']:.0%}\n"
         f"Hours reclaimed: {values['engineer_hours_reclaimed']:.1f}"
     )
+    if DASHBOARD_URL:
+        summary += f"\n📊 Dashboard: {DASHBOARD_URL}"
     await notify(summary, "daily-report")
     return {"summary": summary, "metrics": values}
 
