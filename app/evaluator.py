@@ -7,6 +7,7 @@ import httpx
 
 from .config import AUTO_MERGE, GITHUB_TOKEN, HOURS_PER_ISSUE
 from .db import connect, now
+from .issue_comments import comment_on_issue, completion_comment
 from .notifier import notify
 from .state import transition
 
@@ -107,6 +108,9 @@ async def evaluate_task(task_id):
             (task_id, None if checks is None else int(checks), None, score,
              f"{feedback}; {rationale}", decision, now()),
         )
+        eval_row = db.execute(
+            "SELECT * FROM evals WHERE task_id=? ORDER BY id DESC LIMIT 1", (task_id,)
+        ).fetchone()
     target = "MERGED" if merged else ("FAILED" if decision == "FAILED" else
                                       "AWAITING_HUMAN_REVIEW")
     transition(task_id, target, task["correlation_id"])
@@ -114,6 +118,20 @@ async def evaluate_task(task_id):
         f"📊 Issue #{task['issue_number']} evaluated: score {score:.2f} "
         f"(checks: {'passed' if checks is True else 'unknown'}).",
         task["correlation_id"],
+    )
+    await comment_on_issue(
+        task["repo"],
+        task["issue_number"],
+        completion_comment(
+            task["issue_number"],
+            task["pr_url"],
+            score,
+            checks,
+            eval_row["merge_decision"],
+            rationale,
+            task["session_url"],
+            task["created_at"],
+        ),
     )
     if merged:
         await notify(

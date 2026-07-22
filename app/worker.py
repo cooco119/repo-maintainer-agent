@@ -4,6 +4,7 @@ from .db import connect, now
 from .devin_client import DevinClient
 from .logging_utils import log_event
 from .notifier import notify
+from .issue_comments import comment_on_issue, failure_comment, start_comment
 from .state import transition
 
 class PriorityQueue:
@@ -53,10 +54,17 @@ against {task['repo']}'s master branch."""
                     with connect() as db:
                         db.execute("UPDATE tasks SET session_id=?,session_url=?,attempts=attempts+1,updated_at=? WHERE id=?",
                                    (result["session_id"], result.get("url"), now(), task["id"]))
+                    task["session_id"] = result["session_id"]
+                    task["session_url"] = result.get("url")
                     await notify(
                         f"🔧 Starting work on issue #{task['issue_number']} — session: "
                         f"{result.get('url', 'pending')}",
                         cid,
+                    )
+                    await comment_on_issue(
+                        task["repo"],
+                        task["issue_number"],
+                        start_comment(task["issue_number"], result.get("url")),
                     )
                 while True:
                     status = await self.client.get_session(result["session_id"])
@@ -115,6 +123,13 @@ against {task['repo']}'s master branch."""
                     await notify(
                         f"❌ Issue #{task['issue_number']} failed after {attempts} attempts.",
                         cid,
+                    )
+                    await comment_on_issue(
+                        task["repo"],
+                        task["issue_number"],
+                        failure_comment(
+                            task["issue_number"], attempts, task.get("session_url")
+                        ),
                     )
 
     async def serve(self):
