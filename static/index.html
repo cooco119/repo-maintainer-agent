@@ -1,0 +1,6 @@
+<!doctype html><meta charset="utf-8"><title>Devin Remediator</title>
+<style>body{font:14px system-ui;margin:2rem;background:#f5f7fb}.board{display:flex;gap:1rem;flex-wrap:wrap}.col{background:white;padding:1rem;min-width:180px;border-radius:8px}li{margin:.5rem 0}</style>
+<h1>Devin Remediator</h1><pre id="metrics"></pre><div class="board" id="board"></div>
+<script>
+async function refresh(){const [t,m]=await Promise.all([fetch('/api/tasks').then(x=>x.json()),fetch('/api/metrics').then(x=>x.json())]); metrics.textContent=JSON.stringify(m,null,2); const states=['QUEUED','WORKING','BLOCKED','IN_REVIEW','EVALUATING','DONE','FAILED']; board.innerHTML=states.map(s=>`<section class="col"><h3>${s}</h3><ul>${t.filter(x=>x.state===s).map(x=>`<li>#${x.issue_number} ${x.title}</li>`).join('')}</ul></section>`).join('')} refresh();setInterval(refresh,5000);
+</script>
