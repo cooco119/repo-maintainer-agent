@@ -33,9 +33,10 @@ logs so dry-run demos still show the teammate updates.
 
 ### Conversational Slack bot
 
-For a private, no-public-URL Slack bot, create a Slack app with Socket Mode enabled and
-install it with `chat:write`, `app_mentions:read`, `im:history`, and `channels:history`
-scopes. Subscribe to `app_mention` and message events, then configure:
+For a private, no-public-URL Slack bot, use
+[`slack-app-manifest.yml`](slack-app-manifest.yml) at
+api.slack.com/apps → **Create New App → From a manifest**. After creating the app,
+create an App-Level token with the `connections:write` scope, then configure:
 
 | Variable | Default | Purpose |
 |---|---|---|
