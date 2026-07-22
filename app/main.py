@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
 from .config import REPO, SCAN_INTERVAL_MIN, SLACK_APP_TOKEN, SLACK_BOT_TOKEN
-from .db import connect, init_db
+from .db import connect, init_db, row_task
 from .evaluator import metrics
 from .ingest import ingest_issue
 from .notifier import notify
@@ -17,6 +17,12 @@ pool = WorkerPool()
 @asynccontextmanager
 async def lifespan(app):
     init_db()
+    with connect() as db:
+        resumable = db.execute(
+            "SELECT * FROM tasks WHERE state IN ('QUEUED','WORKING','BLOCKED')"
+        ).fetchall()
+    for row in resumable:
+        await pool.enqueue(row_task(row))
     worker = asyncio.create_task(pool.serve())
     scanner = asyncio.create_task(_scheduled_scan()) if SCAN_INTERVAL_MIN else None
     slack = (

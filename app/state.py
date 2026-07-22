@@ -17,6 +17,8 @@ ALLOWED_TRANSITIONS = {
 def transition(task_id: int, target: str, correlation_id: str, payload=None):
     with connect() as db:
         row = db.execute("SELECT state FROM tasks WHERE id=?", (task_id,)).fetchone()
+        if row and row["state"] == target:
+            return
         if not row or target not in ALLOWED_TRANSITIONS[row["state"]]:
             raise ValueError(f"invalid transition to {target}")
         db.execute("UPDATE tasks SET state=?,updated_at=? WHERE id=?", (target, now(), task_id))

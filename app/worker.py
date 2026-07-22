@@ -35,15 +35,29 @@ Repository: {task['repo']}.
 Fixes #{task['issue_number']}. Create branch remediator/issue-{task['issue_number']},
 make the minimal safe fix, run relevant lint and tests, and open a pull request
 against {task['repo']}'s master branch."""
-                result = await self.client.create_session(prompt)
+                if task.get("session_id"):
+                    result = {
+                        "session_id": task["session_id"],
+                        "url": task.get("session_url"),
+                    }
+                    with connect() as db:
+                        db.execute(
+                            "INSERT INTO events(task_id,correlation_id,event_type,payload,created_at) "
+                            "VALUES(?,?,?,?,?)",
+                            (task["id"], cid, "TASK_RESUMED", "{}", now()),
+                        )
+                    log_event("task_resumed", cid, task_id=task["id"],
+                              session_id=task["session_id"])
+                else:
+                    result = await self.client.create_session(prompt)
+                    with connect() as db:
+                        db.execute("UPDATE tasks SET session_id=?,session_url=?,attempts=attempts+1,updated_at=? WHERE id=?",
+                                   (result["session_id"], result.get("url"), now(), task["id"]))
                 await notify(
                     f"🔧 Starting work on issue #{task['issue_number']} — session: "
                     f"{result.get('url', 'pending')}",
                     cid,
                 )
-                with connect() as db:
-                    db.execute("UPDATE tasks SET session_id=?,session_url=?,attempts=attempts+1,updated_at=? WHERE id=?",
-                               (result["session_id"], result.get("url"), now(), task["id"]))
                 while True:
                     status = await self.client.get_session(result["session_id"])
                     value = str(status.get("status_enum", "")).lower()
