@@ -3,13 +3,18 @@ from .db import connect, now
 from .logging_utils import log_event
 from .telemetry import span
 
-STATES = ("QUEUED", "WORKING", "BLOCKED", "IN_REVIEW", "EVALUATING", "DONE", "FAILED")
+STATES = (
+    "QUEUED", "WORKING", "BLOCKED", "IN_REVIEW", "EVALUATING",
+    "MERGED", "AWAITING_HUMAN_REVIEW", "DONE", "FAILED",
+)
 ALLOWED_TRANSITIONS = {
     "QUEUED": {"WORKING", "FAILED"},
     "WORKING": {"BLOCKED", "IN_REVIEW", "FAILED"},
     "BLOCKED": {"WORKING", "FAILED"},
     "IN_REVIEW": {"EVALUATING", "FAILED"},
-    "EVALUATING": {"DONE", "FAILED"},
+    "EVALUATING": {"MERGED", "AWAITING_HUMAN_REVIEW", "DONE", "FAILED"},
+    "MERGED": set(),
+    "AWAITING_HUMAN_REVIEW": set(),
     "DONE": set(),
     "FAILED": {"QUEUED"},
 }

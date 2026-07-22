@@ -19,7 +19,7 @@ async def test_dry_run_happy_path():
     task, _ = ingest_issue("x/y", 3, "title", "body")
     await WorkerPool().run_one(task)
     with connect() as db:
-        assert db.execute("SELECT state FROM tasks WHERE id=?", (task["id"],)).fetchone()["state"] == "DONE"
+        assert db.execute("SELECT state FROM tasks WHERE id=?", (task["id"],)).fetchone()["state"] == "AWAITING_HUMAN_REVIEW"
 
 
 @pytest.mark.asyncio
@@ -39,12 +39,12 @@ async def test_worker_pool_runs_tasks_in_parallel():
         await asyncio.sleep(0.05)
         with connect() as db:
             states = [row["state"] for row in db.execute("SELECT state FROM tasks ORDER BY id")]
-        if states == ["DONE", "DONE", "DONE"]:
+        if states == ["AWAITING_HUMAN_REVIEW"] * 3:
             break
     server.cancel()
     with connect() as db:
         states = [row["state"] for row in db.execute("SELECT state FROM tasks ORDER BY id")]
-    assert states == ["DONE", "DONE", "DONE"]
+    assert states == ["AWAITING_HUMAN_REVIEW"] * 3
 
 
 @pytest.mark.asyncio
@@ -65,7 +65,7 @@ async def test_worker_resumes_existing_session():
                         "session_url": "http://dry-run.local/session/dry-resume-session"})
     with connect() as db:
         row = db.execute("SELECT state,attempts FROM tasks WHERE id=?", (task["id"],)).fetchone()
-        assert row["state"] == "DONE"
+        assert row["state"] == "AWAITING_HUMAN_REVIEW"
         assert row["attempts"] == 1
         assert db.execute(
             "SELECT 1 FROM events WHERE task_id=? AND event_type='TASK_RESUMED'", (task["id"],)

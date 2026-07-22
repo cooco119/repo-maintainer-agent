@@ -15,3 +15,5 @@ SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN", "")
 SLACK_APP_TOKEN = os.getenv("SLACK_APP_TOKEN", "")
 SLACK_CHANNEL = os.getenv("SLACK_CHANNEL", "")
 DASHBOARD_URL = os.getenv("DASHBOARD_URL", "")
+AUTO_MERGE = os.getenv("AUTO_MERGE", "0") == "1"
+GITHUB_POLL_INTERVAL_SEC = int(os.getenv("GITHUB_POLL_INTERVAL_SEC", "30"))

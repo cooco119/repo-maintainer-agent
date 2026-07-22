@@ -18,7 +18,7 @@ details{margin-top:8px}.timeline{font-size:11px;color:#6d7890;padding-left:16px}
 <body><header><div><b>DEVIN REMEDIATOR</b><div class="muted">Autonomous GitHub remediation control room</div></div><span id="updated">Refreshing…</span></header>
 <main><section class="cards" id="cards"></section><h2>Task board</h2><section class="board" id="board"></section></main>
 <script>
-const states=['QUEUED','WORKING','BLOCKED','IN_REVIEW','EVALUATING','DONE','FAILED'];
+const states=['QUEUED','WORKING','BLOCKED','IN_REVIEW','EVALUATING','AWAITING_HUMAN_REVIEW','MERGED','DONE','FAILED'];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function refresh(){const [ts,m]=await Promise.all([fetch('/api/tasks').then(r=>r.json()),fetch('/api/metrics').then(r=>r.json())]);
 const d=m.success_by_difficulty||{};const bars=['easy','medium','hard'].map(x=>`<span title="${x}"><i class="bar" style="height:${Math.max(3,(d[x]||0)*30)}px"></i></span>`).join('');

@@ -34,11 +34,16 @@ def init_db():
         );
         CREATE TABLE IF NOT EXISTS evals (
           id INTEGER PRIMARY KEY, task_id INTEGER NOT NULL, checks_passed INTEGER,
-          judge_score REAL, score REAL NOT NULL, feedback TEXT, created_at TEXT NOT NULL
+          judge_score REAL, score REAL NOT NULL, feedback TEXT, merge_decision TEXT,
+          created_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS reviews (
           id INTEGER PRIMARY KEY, task_id INTEGER NOT NULL, action TEXT NOT NULL,
           body TEXT, created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS meta (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS events_task_idx ON events(task_id);
         """)
@@ -46,14 +51,17 @@ def init_db():
         if "session_url" not in columns:
             db.execute("ALTER TABLE tasks ADD COLUMN session_url TEXT")
         eval_columns = {row["name"]: row for row in db.execute("PRAGMA table_info(evals)")}
+        if "merge_decision" not in eval_columns:
+            db.execute("ALTER TABLE evals ADD COLUMN merge_decision TEXT")
         if eval_columns.get("checks_passed") and eval_columns["checks_passed"]["notnull"]:
             db.execute("ALTER TABLE evals RENAME TO evals_legacy")
             db.execute("""CREATE TABLE evals (
               id INTEGER PRIMARY KEY, task_id INTEGER NOT NULL, checks_passed INTEGER,
-              judge_score REAL, score REAL NOT NULL, feedback TEXT, created_at TEXT NOT NULL
+              judge_score REAL, score REAL NOT NULL, feedback TEXT, merge_decision TEXT,
+              created_at TEXT NOT NULL
             )""")
-            db.execute("""INSERT INTO evals(id,task_id,checks_passed,judge_score,score,feedback,created_at)
-                          SELECT id,task_id,checks_passed,judge_score,score,feedback,created_at
+            db.execute("""INSERT INTO evals(id,task_id,checks_passed,judge_score,score,feedback,merge_decision,created_at)
+                          SELECT id,task_id,checks_passed,judge_score,score,feedback,merge_decision,created_at
                           FROM evals_legacy""")
             db.execute("DROP TABLE evals_legacy")
 
