@@ -53,11 +53,11 @@ against {task['repo']}'s master branch."""
                     with connect() as db:
                         db.execute("UPDATE tasks SET session_id=?,session_url=?,attempts=attempts+1,updated_at=? WHERE id=?",
                                    (result["session_id"], result.get("url"), now(), task["id"]))
-                await notify(
-                    f"🔧 Starting work on issue #{task['issue_number']} — session: "
-                    f"{result.get('url', 'pending')}",
-                    cid,
-                )
+                    await notify(
+                        f"🔧 Starting work on issue #{task['issue_number']} — session: "
+                        f"{result.get('url', 'pending')}",
+                        cid,
+                    )
                 while True:
                     status = await self.client.get_session(result["session_id"])
                     value = str(status.get("status_enum", "")).lower()
@@ -102,6 +102,8 @@ against {task['repo']}'s master branch."""
             except Exception as exc:
                 log_event("task_failed", cid, task_id=task["id"], error=str(exc))
                 with connect() as db:
+                    db.execute("UPDATE tasks SET attempts=attempts+1,updated_at=? WHERE id=?",
+                               (now(), task["id"]))
                     attempts = db.execute("SELECT attempts FROM tasks WHERE id=?", (task["id"],)).fetchone()["attempts"]
                 if attempts < 3:
                     try: transition(task["id"], "FAILED", cid); transition(task["id"], "QUEUED", cid)
