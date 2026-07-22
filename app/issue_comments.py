@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import httpx
 
-from .config import GITHUB_TOKEN
+from .gh_token import get_github_token, invalidate
 from .logging_utils import log_event
 
 
@@ -58,7 +58,8 @@ def failure_comment(issue_number, attempts, session_url):
 async def comment_on_issue(repo, number, body, client=None):
     """Post a GitHub issue comment, degrading to a structured log on failure."""
     correlation_id = f"github-issue-{repo}#{number}"
-    if not GITHUB_TOKEN:
+    token = get_github_token()
+    if not token:
         log_event("github_issue_comment", correlation_id, repo=repo, number=number,
                   body=body, mode="skipped")
         return False
@@ -68,7 +69,7 @@ async def comment_on_issue(repo, number, body, client=None):
             timeout=20,
             headers={
                 "Accept": "application/vnd.github+json",
-                "Authorization": f"Bearer {GITHUB_TOKEN}",
+                "Authorization": f"Bearer {token}",
             },
         )
     try:
@@ -76,6 +77,8 @@ async def comment_on_issue(repo, number, body, client=None):
             f"https://api.github.com/repos/{repo}/issues/{number}/comments",
             json={"body": body},
         )
+        if response.status_code == 401:
+            invalidate()
         response.raise_for_status()
         return True
     except Exception as exc:

@@ -7,6 +7,7 @@ DRY_RUN = os.getenv("DRY_RUN", "0") == "1"
 MAX_PARALLEL_SESSIONS = int(os.getenv("MAX_PARALLEL_SESSIONS", "3"))
 SCAN_INTERVAL_MIN = int(os.getenv("SCAN_INTERVAL_MIN", "0"))
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+GITHUB_TOKEN_CMD = os.getenv("GITHUB_TOKEN_CMD", "")
 REPO = os.getenv("REPO", "cooco119/superset")
 POLL_INTERVAL = float(os.getenv("POLL_INTERVAL", "30"))
 MAX_ISSUES_PER_SCAN = int(os.getenv("MAX_ISSUES_PER_SCAN", "3"))

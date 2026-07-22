@@ -5,8 +5,9 @@ from urllib.parse import urlparse
 
 import httpx
 
-from .config import AUTO_MERGE, GITHUB_TOKEN, HOURS_PER_ISSUE
+from .config import AUTO_MERGE, HOURS_PER_ISSUE
 from .db import connect, now
+from .gh_token import get_github_token, invalidate
 from .issue_comments import comment_on_issue, completion_comment
 from .notifier import notify
 from .state import transition
@@ -55,20 +56,25 @@ async def evaluate_task(task_id):
     pr_data = None
     api_url = _pr_api_url(task["pr_url"])
     headers = {"Accept": "application/vnd.github+json"}
-    if GITHUB_TOKEN:
-        headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
+    token = get_github_token()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     if api_url:
         try:
             async with httpx.AsyncClient(timeout=20, headers=headers) as client:
                 pr_response = await client.get(api_url)
+                if pr_response.status_code == 401:
+                    invalidate()
                 if pr_response.is_success:
                     pr_exists = True
                     pr_data = pr_response.json()
-                if pr_exists and GITHUB_TOKEN and pr_data:
+                if pr_exists and token and pr_data:
                     sha = pr_data.get("head", {}).get("sha")
                     checks_response = await client.get(
                         f"{api_url.rsplit('/pulls/', 1)[0]}/commits/{sha}/check-runs"
                     )
+                    if checks_response.status_code == 401:
+                        invalidate()
                     if checks_response.is_success:
                         runs = checks_response.json().get("check_runs", [])
                         if runs and any(run.get("status") != "completed" for run in runs):
@@ -84,7 +90,7 @@ async def evaluate_task(task_id):
     score = (0.5 if pr_exists else 0.0) + (0.5 if checks is True else 0.0)
     decision, rationale = merge_policy(task, checks, pr_data)
     merged = False
-    if decision == "AUTO_MERGE" and api_url and GITHUB_TOKEN:
+    if decision == "AUTO_MERGE" and api_url and token:
         try:
             async with httpx.AsyncClient(timeout=20, headers=headers) as client:
                 merge_response = await client.put(
@@ -92,6 +98,8 @@ async def evaluate_task(task_id):
                     json={"merge_method": "squash"},
                 )
             merged = merge_response.is_success and merge_response.json().get("merged", False)
+            if merge_response.status_code == 401:
+                invalidate()
             if not merged:
                 decision = "AWAITING_HUMAN_REVIEW"
                 rationale = "auto-merge request was rejected by GitHub"

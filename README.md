@@ -68,6 +68,7 @@ from remediation workers and the API.
 | `DEVIN_BASE_URL` | Devin v1 URL | API endpoint |
 | `DRY_RUN` | `0` | Simulate Devin sessions |
 | `GITHUB_TOKEN` | empty | GitHub REST access; absent means graceful skip |
+| `GITHUB_TOKEN_CMD` | empty | Command such as `gh auth token` for refreshing GitHub auth |
 | `DB_PATH` | `remediator.db` | SQLite location |
 | `MAX_PARALLEL_SESSIONS` | `3` | Worker concurrency |
 | `POLL_INTERVAL` | `30` | Devin polling seconds |
@@ -77,7 +78,7 @@ from remediation workers and the API.
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | empty | Optional OTLP HTTP endpoint |
 | `SLACK_WEBHOOK_URL` | empty | Optional Slack Incoming Webhook URL |
 | `AUTO_MERGE` | `0` | Set to `1` to allow squash auto-merge after passing checks |
-| `GITHUB_POLL_INTERVAL_SEC` | `30` | Seconds between GitHub issue polls when `GITHUB_TOKEN` is set |
+| `GITHUB_POLL_INTERVAL_SEC` | `30` | Seconds between GitHub issue polls when GitHub auth is configured |
 | `TRIGGER_ASSIGNEE` | token login | GitHub login whose assignment explicitly starts remediation |
 
 The scanner downloads the fork's `requirements/base.txt`, runs `pip-audit -r`, and falls

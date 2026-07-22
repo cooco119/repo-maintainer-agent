@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
 from .config import (
-    DASHBOARD_URL, GITHUB_TOKEN, REPO, SCAN_INTERVAL_MIN, SLACK_APP_TOKEN,
+    DASHBOARD_URL, REPO, SCAN_INTERVAL_MIN, SLACK_APP_TOKEN,
     SLACK_BOT_TOKEN,
 )
 from .db import connect, init_db, row_task
@@ -16,6 +16,7 @@ from .scanner import scan
 from .slack_bot import start_socket_mode
 from .worker import WorkerPool
 from .github_poller import github_poll_loop
+from .gh_token import github_configured
 
 pool = WorkerPool()
 @asynccontextmanager
@@ -29,7 +30,7 @@ async def lifespan(app):
         await pool.enqueue(row_task(row))
     worker = asyncio.create_task(pool.serve())
     scanner = asyncio.create_task(_scheduled_scan()) if SCAN_INTERVAL_MIN else None
-    poller = asyncio.create_task(github_poll_loop(pool)) if GITHUB_TOKEN else None
+    poller = asyncio.create_task(github_poll_loop(pool)) if github_configured() else None
     slack = (
         asyncio.create_task(start_socket_mode(pool))
         if SLACK_BOT_TOKEN and SLACK_APP_TOKEN else None

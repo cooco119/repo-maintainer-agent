@@ -4,10 +4,11 @@ import httpx
 from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 
-from .config import DASHBOARD_URL, GITHUB_TOKEN, REPO, SLACK_APP_TOKEN, SLACK_BOT_TOKEN
+from .config import DASHBOARD_URL, REPO, SLACK_APP_TOKEN, SLACK_BOT_TOKEN
 from .db import connect
 from .evaluator import metrics
 from .ingest import ingest_issue
+from .gh_token import get_github_token, invalidate
 from .notifier import set_bot_client
 from .scanner import scan
 
@@ -120,10 +121,13 @@ def create_app(pool):
 
 async def _remediate(repo, issue_number, pool):
     headers = {"Accept": "application/vnd.github+json"}
-    if GITHUB_TOKEN:
-        headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
+    token = get_github_token()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     async with httpx.AsyncClient(timeout=20, headers=headers) as client:
         response = await client.get(f"https://api.github.com/repos/{repo}/issues/{issue_number}")
+        if response.status_code == 401:
+            invalidate()
         if not response.is_success:
             return None
         issue = response.json()

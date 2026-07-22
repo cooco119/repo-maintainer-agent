@@ -7,8 +7,9 @@ from pathlib import Path
 
 import httpx
 
-from .config import GITHUB_TOKEN, MAX_ISSUES_PER_SCAN, REPO
+from .config import MAX_ISSUES_PER_SCAN, REPO
 from .ingest import ingest_issue
+from .gh_token import get_github_token, invalidate
 
 
 def _pinned(text):
@@ -75,19 +76,24 @@ async def scan():
         title = f"Security vulnerability in {package} {version}"
         body = f"Automated pip-audit/OSV finding: {detail}.\n{marker}"
         issue_number = -int(key[:12], 16)
-        if GITHUB_TOKEN:
-            headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
+        token = get_github_token()
+        if token:
+            headers = {"Authorization": f"Bearer {token}"}
             async with httpx.AsyncClient(timeout=20, headers=headers) as client:
                 existing = await client.get(
                     f"https://api.github.com/repos/{REPO}/issues",
                     params={"state": "open", "per_page": 100},
                 )
+                if existing.status_code == 401:
+                    invalidate()
                 if existing.is_success and any(marker in (i.get("body") or "") for i in existing.json()):
                     continue
                 created_issue = await client.post(
                     f"https://api.github.com/repos/{REPO}/issues",
                     json={"title": title, "body": body, "labels": ["security"]},
                 )
+                if created_issue.status_code == 401:
+                    invalidate()
                 if created_issue.is_success:
                     issue_number = created_issue.json()["number"]
         task, is_new = ingest_issue(REPO, issue_number, title, body, ["security"])

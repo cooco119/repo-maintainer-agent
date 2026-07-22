@@ -5,11 +5,11 @@ import httpx
 
 from .config import (
     GITHUB_POLL_INTERVAL_SEC,
-    GITHUB_TOKEN,
     REPO,
     TRIGGER_ASSIGNEE,
 )
 from .db import connect
+from .gh_token import get_github_token, invalidate
 from .ingest import ingest_issue
 from .logging_utils import log_event
 from .notifier import notify
@@ -80,11 +80,15 @@ async def _scan_issue(client, pool, issue, correlation_id):
     for task in created:
         await pool.enqueue(task)
     summary = f"Dependency scan completed: {len(created)} remediation task(s) created."
-    await client.post(
+    await _request(
+        client,
+        "post",
         f"https://api.github.com/repos/{REPO}/issues/{issue['number']}/comments",
         json={"body": summary},
     )
-    await client.patch(
+    await _request(
+        client,
+        "patch",
         f"https://api.github.com/repos/{REPO}/issues/{issue['number']}",
         json={"state": "closed"},
     )
@@ -92,7 +96,9 @@ async def _scan_issue(client, pool, issue, correlation_id):
 
 
 async def _has_triage_marker(client, number):
-    response = await client.get(
+    response = await _request(
+        client,
+        "get",
         f"https://api.github.com/repos/{REPO}/issues/{number}/comments",
         params={"per_page": 100},
     )
@@ -106,7 +112,7 @@ async def _resolve_assignee(client):
     if TRIGGER_ASSIGNEE:
         return TRIGGER_ASSIGNEE
     if _token_login is None:
-        response = await client.get("https://api.github.com/user")
+        response = await _request(client, "get", "https://api.github.com/user")
         _token_login = response.json().get("login", "") if response.is_success else ""
     return _token_login
 
@@ -141,7 +147,9 @@ async def _triage_issue(client, pool, issue, assignee, is_new):
         f"I think I can handle this. Assign it to {assignee or 'the remediation bot'} "
         "(or add the `remediate` label) and I'll get started."
     )
-    response = await client.post(
+    response = await _request(
+        client,
+        "post",
         f"https://api.github.com/repos/{REPO}/issues/{number}/comments",
         json={"body": comment},
     )
@@ -154,15 +162,29 @@ async def _triage_issue(client, pool, issue, assignee, is_new):
         )
 
 
+async def _request(client, method, url, **kwargs):
+    response = await getattr(client, method)(url, **kwargs)
+    if response.status_code != 401:
+        return response
+    invalidate()
+    token = get_github_token()
+    if hasattr(client, "headers") and token:
+        client.headers["Authorization"] = f"Bearer {token}"
+    return await getattr(client, method)(url, **kwargs)
+
+
 async def poll_once(pool, client=None):
-    if not GITHUB_TOKEN:
+    token = get_github_token()
+    if not token:
         return 0
-    headers = {"Accept": "application/vnd.github+json", "Authorization": f"Bearer {GITHUB_TOKEN}"}
+    headers = {"Accept": "application/vnd.github+json", "Authorization": f"Bearer {token}"}
     own_client = client is None
     if own_client:
         client = httpx.AsyncClient(timeout=20, headers=headers)
     try:
-        response = await client.get(
+        response = await _request(
+            client,
+            "get",
             f"https://api.github.com/repos/{REPO}/issues",
             params={"state": "open", "sort": "created", "direction": "asc", "per_page": 100},
         )

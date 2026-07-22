@@ -40,6 +40,8 @@ def test_failure_comment_contains_attempts_and_session():
 @pytest.mark.asyncio
 async def test_comment_on_issue_uses_injected_client(monkeypatch):
     class Response:
+        status_code = 201
+
         def raise_for_status(self):
             return None
 
@@ -52,7 +54,7 @@ async def test_comment_on_issue_uses_injected_client(monkeypatch):
             return Response()
 
     client = Client()
-    monkeypatch.setattr(issue_comments, "GITHUB_TOKEN", "test-token")
+    monkeypatch.setattr(issue_comments, "get_github_token", lambda: "test-token")
     assert await issue_comments.comment_on_issue("acme/repo", 42, "hello", client) is True
     assert client.calls == [
         (
