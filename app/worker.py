@@ -61,6 +61,9 @@ against {task['repo']}'s master branch."""
                 while True:
                     status = await self.client.get_session(result["session_id"])
                     value = str(status.get("status_enum", "")).lower()
+                    pr = status.get("pull_request") or {}
+                    if value in {"blocked", "blocked_by_user"} and pr:
+                        value = "finished"
                     if value in {"blocked", "blocked_by_user"}:
                         transition(task["id"], "BLOCKED", cid)
                         if not task.get("blocked_escalated"):
@@ -79,7 +82,6 @@ against {task['repo']}'s master branch."""
                             await notify(f"🙋 Need human help on issue #{task['issue_number']}", cid)
                             raise RuntimeError("Devin session blocked")
                     elif value in {"finished", "completed", "done"}:
-                        pr = status.get("pull_request") or {}
                         if not pr: raise RuntimeError("session finished without pull request")
                         with connect() as db:
                             db.execute("UPDATE tasks SET pr_url=?,updated_at=? WHERE id=?",
