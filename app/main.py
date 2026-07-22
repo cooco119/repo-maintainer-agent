@@ -4,12 +4,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
-from .config import REPO, SCAN_INTERVAL_MIN
+from .config import REPO, SCAN_INTERVAL_MIN, SLACK_APP_TOKEN, SLACK_BOT_TOKEN
 from .db import connect, init_db
 from .evaluator import metrics
 from .ingest import ingest_issue
 from .notifier import notify
 from .scanner import scan
+from .slack_bot import start_socket_mode
 from .worker import WorkerPool
 
 pool = WorkerPool()
@@ -18,10 +19,16 @@ async def lifespan(app):
     init_db()
     worker = asyncio.create_task(pool.serve())
     scanner = asyncio.create_task(_scheduled_scan()) if SCAN_INTERVAL_MIN else None
+    slack = (
+        asyncio.create_task(start_socket_mode(pool))
+        if SLACK_BOT_TOKEN and SLACK_APP_TOKEN else None
+    )
     yield
     worker.cancel()
     if scanner:
         scanner.cancel()
+    if slack:
+        slack.cancel()
 
 async def _scheduled_scan():
     while True:

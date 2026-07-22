@@ -31,6 +31,24 @@ starts, blockers, pull requests, evaluations, and terminal failures. `GET /repor
 as JSON. Without a webhook configured, notifications are emitted as structured fallback
 logs so dry-run demos still show the teammate updates.
 
+### Conversational Slack bot
+
+For a private, no-public-URL Slack bot, create a Slack app with Socket Mode enabled and
+install it with `chat:write`, `app_mentions:read`, `im:history`, and `channels:history`
+scopes. Subscribe to `app_mention` and message events, then configure:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SLACK_BOT_TOKEN` | empty | Slack bot token (`xoxb-...`) |
+| `SLACK_APP_TOKEN` | empty | Socket Mode app token (`xapp-...`) |
+| `SLACK_CHANNEL` | empty | Channel for proactive bot lifecycle posts |
+| `SLACK_WEBHOOK_URL` | empty | Incoming Webhook fallback when bot channel is unset |
+
+The FastAPI lifespan starts Socket Mode only when both bot and app tokens are set.
+The bot understands `status`, `report`, `issue #N`, `scan`, and
+`remediate owner/repo#N` (or `remediate #N`). Connection and handler failures are isolated
+from remediation workers and the API.
+
 ## Environment
 
 | Variable | Default | Purpose |

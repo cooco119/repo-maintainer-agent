@@ -5,9 +5,23 @@ import httpx
 
 from .logging_utils import log_event
 
+_bot_client = None
+
+
+def set_bot_client(client):
+    global _bot_client
+    _bot_client = client
+
 
 async def notify(message: str, correlation_id: str = ""):
     """Send a teammate-style update without allowing Slack to affect work."""
+    if _bot_client and os.getenv("SLACK_BOT_TOKEN") and os.getenv("SLACK_CHANNEL"):
+        try:
+            await _bot_client.chat_postMessage(channel=os.environ["SLACK_CHANNEL"], text=message)
+            return True
+        except Exception as exc:
+            log_event("slack_notify", correlation_id, message=message, error=str(exc), mode="bot")
+            return False
     webhook_url = os.getenv("SLACK_WEBHOOK_URL", "")
     if not webhook_url:
         log_event("slack_notify", correlation_id, message=message, mode="fallback")
